@@ -24,6 +24,7 @@ import (
 	"context"
 	goerrors "errors"
 	"io"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/resolver"
 
 	"github.com/m3db/m3/src/dbnode/encoding"
 	"github.com/m3db/m3/src/query/block"
@@ -149,16 +151,16 @@ func NewGRPCClient(
 	scope := instrumentOpts.MetricsScope()
 	interceptorOpts := xgrpc.InterceptorInstrumentOptions{Scope: scope}
 
-	resolver := newStaticResolver(addresses)
-	balancer := grpc.RoundRobin(resolver)
+	registerStaticResolver(addresses)
 	dialOptions := append([]grpc.DialOption{
-		grpc.WithBalancer(balancer),
+		grpc.WithResolvers(resolver.Get(_schema)),
+		grpc.WithBalancerName("round_robin"),
 		grpc.WithInsecure(),
 		grpc.WithUnaryInterceptor(xgrpc.UnaryClientInterceptor(interceptorOpts)),
 		grpc.WithStreamInterceptor(xgrpc.StreamClientInterceptor(interceptorOpts)),
 	}, defaultDialOptions...)
 	dialOptions = append(dialOptions, additionalDialOpts...)
-	cc, err := grpc.Dial("", dialOptions...)
+	cc, err := grpc.Dial(addresses[rand.Intn(len(addresses))], dialOptions...)
 	if err != nil {
 		return nil, err
 	}

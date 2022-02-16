@@ -174,14 +174,16 @@ func buildClient(t *testing.T, hosts []string) Client {
 		SetReadWorkerPool(readWorkerPool).
 		SetTagOptions(models.NewTagOptions())
 
+	fmt.Println("starting client")
 	client, err := NewGRPCClient(testName, hosts, poolsWrapper, opts,
-		instrument.NewTestOptions(t), grpc.WithBlock())
+		instrument.NewTestOptions(t))
+	fmt.Println("started client")
 	require.NoError(t, err)
 	return client
 }
 
 func TestRpc(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController((*panicReporter)(t))
 	defer ctrl.Finish()
 
 	ctx, read, readOpts := createCtxReadOpts(t)
@@ -193,6 +195,15 @@ func TestRpc(t *testing.T) {
 	}()
 
 	checkFetch(ctx, t, client, read, readOpts)
+}
+
+type panicReporter testing.T
+
+func (t *panicReporter) Errorf(format string, args ...interface{}) {
+	(*testing.T)(t).Errorf(format, args...)
+}
+func (panicReporter) Fatalf(format string, args ...interface{}) {
+	panic(fmt.Sprintf(format, args...))
 }
 
 func TestRpcHealth(t *testing.T) {
